@@ -75,7 +75,7 @@ func prepareCommand(in []string, change string) (out []string) {
 
 type CustomLimiter struct {
 	inflightCh chan struct{}
-	rateCh     chan struct{} // time/rate is not in std lib, and time.Ticker does not fit here
+	rateCh     chan struct{} // time/rate is not part of stdlib, and time.Ticker does not fit here
 }
 
 type PerSecond float64
@@ -99,13 +99,13 @@ func (l *CustomLimiter) Wait(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case l.inflightCh <- struct{}{}:
+	case l.inflightCh <- struct{}{}: //get inflight limiter lock
 	}
 
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-l.rateCh:
+	case <-l.rateCh: //then get ratePerSecond limiter lock
 	}
 
 	return nil
