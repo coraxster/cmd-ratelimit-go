@@ -29,16 +29,13 @@ func main() {
 	ctx := makeContext()
 	scanner := bufio.NewScanner(os.Stdin)
 	l := NewCustomLimiter(MaxParallel(*inflight), PerSecond(*rate))
-	wg := sync.WaitGroup{}
 	for scanner.Scan() {
-		if err := l.Wait(ctx); err != nil {
+		if err := l.Get(ctx); err != nil {
 			break
 		}
 		argToFill := scanner.Text()
-		wg.Add(1)
 		go func() {
-			defer l.Done()
-			defer wg.Done()
+			defer l.Put()
 			cmdLine := prepareCommand(command, argToFill)
 			cmd := exec.CommandContext(ctx, cmdLine[0], cmdLine[1:]...)
 			out, err := cmd.Output()
@@ -48,7 +45,7 @@ func main() {
 			log.Print(string(out))
 		}()
 	}
-	wg.Wait()
+	l.Wait()
 	log.Println("fini")
 }
 
@@ -76,6 +73,7 @@ func prepareCommand(in []string, change string) (out []string) {
 type CustomLimiter struct {
 	inflightCh chan struct{}
 	rateCh     chan struct{} // time/rate is not part of stdlib, and time.Ticker does not fit here
+	sync.WaitGroup
 }
 
 type PerSecond float64
@@ -85,6 +83,7 @@ func NewCustomLimiter(inflight MaxParallel, ratePerSecond PerSecond) CustomLimit
 	l := CustomLimiter{
 		make(chan struct{}, inflight),
 		make(chan struct{}),
+		sync.WaitGroup{},
 	}
 	go func() {
 		for {
@@ -95,7 +94,7 @@ func NewCustomLimiter(inflight MaxParallel, ratePerSecond PerSecond) CustomLimit
 	return l
 }
 
-func (l *CustomLimiter) Wait(ctx context.Context) error {
+func (l *CustomLimiter) Get(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -108,9 +107,11 @@ func (l *CustomLimiter) Wait(ctx context.Context) error {
 	case <-l.rateCh: //then get ratePerSecond limiter lock
 	}
 
+	l.Add(1)
 	return nil
 }
 
-func (l *CustomLimiter) Done() {
+func (l *CustomLimiter) Put() {
 	<-l.inflightCh
+	l.Done()
 }

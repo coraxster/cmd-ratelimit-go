@@ -83,12 +83,12 @@ func TestNewCustomLimiterParallelLimit(t *testing.T) {
 	var er error
 
 	go func() {
-		er = l.Wait(ctx)
+		er = l.Get(ctx)
 		a = true
 	}()
 
 	go func() {
-		er = l.Wait(ctx)
+		er = l.Get(ctx)
 		b = true
 	}()
 
@@ -102,12 +102,12 @@ func TestNewCustomLimiterParallelLimit(t *testing.T) {
 		t.Error("ParallelLimited scope executed twice")
 	}
 
-	l.Done()
+	l.Put()
 
 	time.Sleep(time.Millisecond)
 
 	if !(a && b) {
-		t.Error("ParallelLimited scope not executed twice after Done")
+		t.Error("ParallelLimited scope not executed twice after Put")
 	}
 
 	if er != nil {
@@ -122,7 +122,7 @@ func TestNewCustomLimiterContextCanceling(t *testing.T) {
 
 	var er error
 	go func() {
-		er = l.Wait(ctx)
+		er = l.Get(ctx)
 		a = true
 	}()
 
@@ -154,12 +154,12 @@ func TestNewCustomLimiterRateLimitPerSecond(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			for {
-				if l.Wait(ctx) != nil {
+				if l.Get(ctx) != nil {
 					break
 				}
 				cnt.Add()
 				time.Sleep(time.Millisecond)
-				l.Done()
+				l.Put()
 			}
 		}()
 	}
